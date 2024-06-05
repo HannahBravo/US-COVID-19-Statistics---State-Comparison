@@ -1,0 +1,339 @@
+---
+title: "US COVID_19 Cases and Deaths State Comparison"
+author: "Hannah Bravo De Rueda"
+date: "November 2023"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(usmap)
+```
+
+##### US State Comparison
+
+Building on the previous project, analyzing the national averages of COVID-19 statistics in the US, this project will now dive into the COVID-19 statistics at the state level. While understanding the trends on a national level can be helpful in understanding how COVID-19 impacted the United States, it is important to remember that the virus arrived in the United States at different times. For the next part of your analysis, you will begin to look at COVID related deaths and cases at the state and county-levels.
+
+##### Data Import & Wrangling
+
+The first task is to determine the top 10 states in terms of total deaths and cases between March 15, 2020, and December 31, 2021. Before we can determine the top ten states, we need to import the data, combine the three years of data, and remove the records for Puerto Rico. 
+
+```{r import & tidy data}
+# Import New York Times COVID-19 data
+us_counties_2020 <- 
+  read_csv(
+    "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2020.csv")
+us_counties_2021 <- 
+  read_csv(
+    "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2021.csv")
+us_counties_2022 <- 
+  read_csv(
+    "https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties-2022.csv")
+
+# Combine the 2020, 2021, and 2022 COVID data sets. 
+(us_counties <- us_counties_2020 %>% 
+  bind_rows(us_counties_2021) %>% 
+  bind_rows(us_counties_2022))
+
+# Now, remove Puerto Rico and other US territories
+(us_counties <- us_counties %>% 
+  filter(date >= "2020-03-15",
+         state != "Puerto Rico",
+         state != "Virgin Islands",
+         state != "Northern Mariana Islands",
+         state != "Guam",
+         state != "American Samoa"))
+
+us_counties %>% 
+  filter(date == "2022-12-31") %>% 
+  group_by(state)
+```
+
+```{r top 10 states}
+# Determine the top 10 states in terms of total deaths and cases between March 15, 2020, 
+# and December 31, 2021.  
+
+state_totals <- us_counties %>% 
+  filter(date == "2021-12-31") %>% 
+  select(date, state, cases, deaths) %>% 
+  group_by(state) %>% 
+  summarise(total_cases = sum(cases), total_deaths = sum(deaths)) %>% 
+  arrange(desc(total_cases))
+state_totals
+```
+
+I imported three data sets for COVID-19 cases and deaths in the US across 2020, 2021, and 2022 published by New York Times. I combined the three data sets, and filtered out records that are non-sovereign US territories, to focus exclusively on the 50 states. Once I had a combined data set for all 50 states, including the District of Columbia, across each year of the pandemic, I aggregated the data across county to get a total number for each state, as of December 31, 2021. From there, I was able to determine the 10 states in the US with the highest number of COVID-19 cases and deaths. California tops the list at #1, then Texas, Florida, and New York with the 4th highest number of cases.  It's no surprise that we see California, Texas, Florida, and New York holding the top 4 spots, considering they're the states with the largest populations in the US. So naturally, we see higher numbers for COVID-19 cases and deaths, compared to states with smaller populations.  It would be more interesting to determine the states with the highest number of COVID-19 cases and deaths proportionate to the state's population, by calculating cases and deaths per 100,000 people.   
+
+##### Top 10 States Impacted
+
+Determine the top 10 states in terms of deaths per 100,000 people and cases per 100,000 people between March 15, 2020, and December 31, 2021.
+
+```{r top 10 states per}
+# To determine the top 10 states for deaths and cases per 100,000 people between March 15, 2020, 
+# and December 31, 2021, I'll first have to import population estimate data and calculate 
+# population totals by state.  
+
+# Import Population Estimates from US Census Bureau 
+us_population_estimates <- read_csv("https://raw.githubusercontent.com/HannahBravo/US-COVID-19-Statistics---State-Comparison/main/fips_population_estimates.csv")
+
+# Calculate the population estimates for each state by finding the average across 2020 and 2021
+(state_pop_est <- us_population_estimates %>% 
+  group_by(STNAME) %>% 
+  summarise(st_est = round(sum(Estimate)/2, 0))) 
+
+# Now join the state population estimates to the state cases and deaths table, and calculate 
+# the top 10 states with the highest cases and deaths per 100,000 people
+state_totals %>% 
+  left_join(state_pop_est, by = join_by(state == STNAME)) %>% 
+  mutate(cases_per = round(total_cases/st_est*10000, 1),
+         deaths_per = round(total_deaths/st_est*10000, 1)) %>% 
+  arrange(desc(cases_per))
+```
+
+In order to determine the states with the highest number of COVID-19 cases and deaths proportionate to their overall population, we need to weight each state's total number of cases and deaths per 100,000 people. I first imported the population estimate for each state in the US, for 2020 and 2021, tidied it up by averaging the estimates across 2020 and 2021, and then grouped them by state.  With each states averaged population estimate, I recalculated the COVID-19 numbers for each state by dividing by the population estimate, and multiplied that result by 100,000.  The new values are the COVID-19 statistics for each state, per 100,000 people. Giving us a better picture of COVID-19's impact on each state, relative to the size of their overall population. 
+
+I arranged the table to display the results with the highest 'total_cases' to lowest, grouped by state. We now see that North Dakota tops the list at #1, Alaska in second, Rhode Island, South Dakota, and Wyoming securing the top five for the states with the highest number of cases and deaths per 100,000 people. At the bottom of the list, we see Hawaii at #51, then Oregon, Vermont, Maine, and Washington rounding out the bottom five, for the states with the least number of COVID-19 cases and deaths per 100,000 people. 
+
+This normalized list shows us which states were hit the hardest by COVID-19, despite population size.  Looking further into why North Dakota, and Alaska were impacted the most, compared to Hawaii and Oregon, gives us a better chance for narrowing in on the why. For instance, it's interesting that Alaska and Hawaii, both remote islands, feature on opposite ends of the list. Why was Alaska more exposed to COVID-19 than Hawaii? Did public policy and economic factors contribute more to the outcome than geographic location?    
+
+##### North Dakota
+
+Since North Dakota was impacted the most by COVID-19, I will calculate the seven-day averages for cases and deaths per 100,000 people. Once I have calculated the seven-day averages, I will create a visualization using ggplot2 to show the cases and deaths per 100,000 people as well as the seven-day average per 100,000 in North Dakota. 
+
+```{r north dakota, warning = FALSE}
+# I'll filter the previous population estimate table for North Dakota, then calculate 
+# cases/deaths per 100,000 people and the 7-day rolling average between March 15, 2020, 
+# and December 31, 2021
+
+# Filter for North Dakota, then sum cases and deaths by date
+(nd_totals <- us_counties %>% 
+  filter(state == "North Dakota" & date <= "2021-12-31") %>% 
+  group_by(date, state) %>% 
+  summarize(total_cases = sum(cases), total_deaths = sum(deaths)))
+
+# Calculate cases/deaths per 100,000 people
+(nd_totals <- nd_totals %>% 
+  left_join(state_pop_est, by = join_by(state == STNAME)) %>%
+  mutate(cases_per = round(total_cases/st_est*10000, 2),
+         deaths_per = round(total_deaths/st_est*10000, 4)))
+
+# Calculate the 7-day rolling average for cases/deaths per 100,000 people
+(nd_wkly_avg <- nd_totals %>% 
+  ungroup() %>% 
+  mutate(wkly_avg_cases = round(lag((lead(nd_totals$cases_per, n= 7) - 
+                                       cases_per)/7, n = 7), 2),
+         wkly_avg_deaths = round(lag((lead(nd_totals$deaths_per, n= 7) - 
+                                        deaths_per)/7, n = 7), 3)))
+
+# Create a visualization representing the data for North Dakota
+nd_totals %>% 
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = cases_per, color = "Cases")) +
+  geom_line(aes(y = deaths_per*100, color = "Deaths")) +
+  scale_y_continuous(
+    name = "Daily COVID Cases per 100,000 in North Dakota",
+    sec.axis = sec_axis(~./100, name = "Daily COVID Deaths per 100,000 in North Daokta")) +
+  labs(x = "Year", title = "Daily COVID-19 Cases & Deaths in North Dakota", color = "")
+
+nd_wkly_avg %>% 
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = wkly_avg_cases, color = "Cases")) +
+  geom_line(aes(y = wkly_avg_deaths*40, color = "Deaths")) +
+  scale_y_continuous(
+    name = "7-Day Average of COVID-19 Cases",
+    sec.axis = sec_axis(~./40, name = "7-Day Average of COVID-19 Deaths")) +
+  labs(x = "Year", title = "COVID-19 Cases & Deaths in North Dakota", color = "")
+
+```
+I chose to take a closer look at North Dakota, since it topped the list, as the state with the most COVID-19 cases and deaths per 100,000 people. I added two columns to the table to calculate the 7-day rolling average of North Dakota's cases and deaths per 100,000 people. I then charted total COVID-19 cases and deaths per 100,000 people, as well as the 7-day rolling average.  
+
+The first chart is a time series that shows the cumulative growth of COVID-19 cases and deaths between March 15, 2020 and December 31, 2021. There is a dual axis where the left axis represents the scale for COVID-19 cases per 100,000 in North Dakota and the right axis represents the scale for COVID-19 deaths per 100,000 people. Cases is represented by the red line, and deaths by the light blue line.  Both lines follow a similar trend in that they both experience proportionate spikes and plateaus around the same time, despite their different scales.  For instance, there is a significant spike in both cases and deaths in the Fall of 2020. Both cases and deaths start around 0 at the beginning of the year, but cases rises up to over 1,000 cases per 100,000 people by the end of 2020; and deaths reaches just under 20 deaths per 100,000 people. Something to note, because the deaths per 100,000 people data is significantly less than the cases per 100,000 people. I had to multiply the deaths data by 100 so that it would be charted relative to the cases data. Then scaled the secondary axis down by 100 to reflect the actual scale of the deaths data.  
+
+The second chart is the 7-day rolling average of both COVID-19 cases and deaths per 100,000 people, between March 15, 2020 and December 31, 2021. There is a dual axis where the left axis represents the 7-day average of cases per 100,000 in North Dakota and the right axis represents the 7-day average of deaths per 100,000 people. Cases is represented by the red line, and deaths by the light blue line. Both lines follow a similar trend in spikes and dips, despite their different scales. Both cases and deaths reach their highest weekly average in the Fall of 2020 where cases reaches above 15 cases per 100,000 people, and deaths reaches about 10 deaths per 100,000 people. The next spike is in the Fall of 2021, with cases getting up to about 7.5 cases per 100,000 people. Those numbers are still only half of what they were in the Fall of 2020. Something to note, because the deaths per 100,000 people data is significantly less than the cases per 100,000 people. I had to multiply the deaths data by 40 so that it would be charted relative to the cases data. Then scaled the secondary axis down by 40 to reflect the actual scale of the deaths data.    
+
+Both of these charts could be supplemented with event lines denoting important policy change dates for COVID restrictions, vaccine release, and the dates of any enforced mandates.  
+
+##### Top 5 Counties in North Dakota
+
+Still analyzing North Dakota, I want to identify the top 5 counties in terms of deaths and cases per 100,000 people. 
+
+```{r north dakota counties}
+# Now I'll filter North Dakota between 3-15-2020 & 12-31-2021 from the combined data set from the 
+# previous project to summarize cases and deaths.
+
+# Import the county population estimates for North Dakota for 2020 and 2021
+nd_county_pop_est <- read_csv("https://raw.githubusercontent.com/HannahBravo/US-COVID-19-Statistics---State-Comparison/main/ND%20County%20pop%20estimate%202020%20-2022.csv")
+
+nd_county_pop_est <- nd_county_pop_est[-1,] %>% 
+  rename(county = 
+           "table with row headers in column A and column headers in rows 3 through 4 (leading dots indicate sub-parts)",
+         "2020" = "...2",
+         "2021" = "...3",
+         "2022" = "...4")
+  
+nd_county_pop_est <- nd_county_pop_est[, -4] %>% 
+    mutate(across("county", str_replace_all, "[.]", ""))
+
+nd_county_pop_est <- nd_county_pop_est %>% 
+  mutate(across("county", str_replace_all, " County$", ""))
+
+nd_county_pop_est <- nd_county_pop_est %>% 
+  mutate(county_est = rowSums(nd_county_pop_est[, -1])/2) %>% 
+  select(county, county_est)
+  
+# Next, join the ND county population estimates to the ND county cases and deaths table
+(nd_counties <- us_counties %>% 
+  filter(state == "North Dakota" & date == "2021-12-31")%>% 
+  filter(county != "Unknown"))
+
+# Top 10 counties in North Dakota with the most cases 
+(nd_county_cases <- nd_counties %>% 
+  left_join(nd_county_pop_est, by = join_by(county == county)) %>% 
+  group_by(county) %>% 
+  summarise(date, fips, total_county_cases = round(sum(cases)/county_est*100000, 2), 
+            total_county_deaths = round(sum(deaths)/county_est*100000, 2)) %>% 
+  arrange(desc(total_county_cases)))
+
+# Top 10 counties in North Dakota with the most deaths
+(nd_county_deaths <- nd_counties %>% 
+  left_join(nd_county_pop_est, by = join_by(county == county)) %>% 
+  group_by(county) %>% 
+  summarise(date, fips, total_county_cases = round(sum(cases)/county_est*100000, 2), 
+            total_county_deaths = round(sum(deaths)/county_est*100000, 2)) %>% 
+  arrange(desc(total_county_deaths)))
+
+```
+
+We know that North Dakota as a state overall took the hardest hit from COVID-19, but what about the counties that make up North Dakota? Which ones had the highest number of cases and deaths per 100,000 people? In order to compare the numbers for COVID-19 across counties in North Dakota, I had to import the county population estimates for North Dakota. Once that data was imported and tidied, I calculated the average population estimate for each county across 2020 and 2021. I then used the averaged estimate to calculate the total number of cases and deaths per 100,000 people for each county in North Dakota. 
+
+We see Rolette, Stark, and Eddy as the top three counties in North Dakota with the highest COVID-19 cases per 100,000 people. Then Dickey, Pierce, and Renville with the highest number of COVID-19 related deaths per 100,000 people. You would expect the counties that were hit the hardest with COVID-19 cases, would also be the counties hit the hardest with COVID-19 related deaths. However, Dickey county is the only county that appears in the top ten for both cases AND deaths.  So why did some counties experience more exposure to the virus, but others experienced more deaths related to the virus? It would be interesting to compare the average age of the population for the counties with the most deaths to those with the most cases.         
+
+##### North Dakota County-Level Visualization
+
+I will create a map projection to plot county-level deaths and cases per 100,000 people for North Dakota. 
+
+```{r county map}
+# I'll use 'plot_usmap()' to create a map projection, visualizing the cases and deaths in the 
+# counties of North Dakota.
+
+# Map projection of COVID cases in North Dakota by county
+plot_usmap(regions = "county", include = "ND", data = nd_county_cases, 
+           values = "total_county_cases", color = "black") +
+  scale_fill_continuous(low = "white", high = "purple", name = "Cases per 100,000") +
+  theme(legend.position = "right")
+
+# Map projection of COVID deaths in North Dakota by county
+plot_usmap(regions = "county", include = "ND", data = nd_county_deaths, 
+           values = "total_county_deaths", color = "black") +
+  scale_fill_continuous(low = "white", high = "red", name = "Deaths per 100,000") +
+  theme(legend.position = "right")
+
+```
+
+I used the package 'usmap' to visualize a population density map of COVID-19's impact on counties across North Dakota. I created two population density maps, one displaying the impact of COVID-19 cases across counties, and the second shows the impact of COVID-19 related deaths across counties. The regions on the map with the darkest shade of color, are the counties impacted the most by either cases or deaths. 
+
+For the map showing cases across North Dakota, we don't see an obvious trend or grouping among the counties hit the hardest or the least. There is one county on the map that looks very close to white, suggesting no instances of COVID-19 cases, which would need to be investigated further. For COVID-19 related deaths across North Dakota, we again don't see an obvious trend or grouping of the counties on either end. However, we do see the same county with almost no instances of COVID-19 deaths. 
+
+Again, the counties hit the hardest with the most cases are not the same counties hit the hardest with COVID-19 related deaths. Suggesting that geographic location doesn't seem to play a role in how a county is impacted by COVID-19. Could it instead be a result of how age and economic resources are distributed across counties in North Dakota? It would be interesting to compare these numbers to each counties average age, and SES scores.    
+
+##### Alaska, Oregon, & Hawaii Statistics
+
+Finally, I want to look at three other states: Alaska, Oregon, and Hawaii, and calculate the seven-day average for new deaths and cases per 100,000 people between March 15, 2020, and December 31, 2021. 
+
+```{r Other states 7-day average}
+# The three other states I am going to pick are Alaska because of it's remoteness and being 
+# second on the list for most cases per 100,000 people, then Oregon for being second to last 
+# on the list, and Hawaii for it's remoteness and being last on the list of most cases 
+# per 100,000 people.
+
+# Alaska
+(ak_totals <- us_counties %>% 
+  filter(state == "Alaska" & date <= "2021-12-31") %>% 
+  group_by(date, state) %>% 
+  summarize(total_cases = sum(cases), total_deaths = sum(deaths)))
+
+(ak_totals <- ak_totals %>% 
+  left_join(state_pop_est, by = join_by(state == STNAME)) %>%
+  mutate(cases_per = round(total_cases/st_est*100000, 2),
+         deaths_per = round(total_deaths/st_est*100000, 4)))
+
+(ak_wkly_avg <- ak_totals %>% 
+  ungroup() %>%
+  mutate(wkly_avg_cases = round(lag((lead(ak_totals$cases_per, n= 7) - 
+                                       ak_totals$cases_per)/7, n = 7), 2),
+         wkly_avg_deaths = round(lag((lead(ak_totals$deaths_per, n= 7) - 
+                                        ak_totals$deaths_per)/7, n = 7), 3)))
+
+# Oregon
+(or_totals <- us_counties %>% 
+  filter(state == "Oregon" & date <= "2021-12-31") %>% 
+  group_by(date, state) %>% 
+  summarize(total_cases = sum(cases), total_deaths = sum(deaths)))
+
+(or_totals <- or_totals %>% 
+  left_join(state_pop_est, by = join_by(state == STNAME)) %>%
+  mutate(cases_per = round(total_cases/st_est*100000, 2),
+         deaths_per = round(total_deaths/st_est*100000, 4)))
+
+(or_wkly_avg <- or_totals %>% 
+  ungroup() %>%
+  mutate(wkly_avg_cases = round(lag((lead(or_totals$cases_per, n= 7) - 
+                                       or_totals$cases_per)/7, n = 7), 2),
+         wkly_avg_deaths = round(lag((lead(or_totals$deaths_per, n= 7) - 
+                                        or_totals$deaths_per)/7, n = 7), 3)))
+
+# Hawaii
+(hi_totals <- us_counties %>% 
+  filter(state == "Hawaii" & date <= "2021-12-31") %>% 
+  group_by(date, state) %>% 
+  summarize(total_cases = sum(cases), total_deaths = sum(deaths)))
+
+(hi_totals <- hi_totals %>% 
+  left_join(state_pop_est, by = join_by(state == STNAME)) %>%
+  mutate(cases_per = round(total_cases/st_est*100000, 2),
+         deaths_per = round(total_deaths/st_est*100000, 4)))
+
+(hi_wkly_avg <- hi_totals %>%  
+  ungroup() %>% 
+  mutate(wkly_avg_cases = round(lag((lead(hi_totals$cases_per, n= 7) - 
+                                        cases_per)/7, n= 7), 2),
+         wkly_avg_deaths = round(lag((lead(hi_totals$deaths_per, n= 7) - 
+                                        deaths_per)/7, n= 7), 3)))
+```
+
+Breaking down the numbers for North Dakota was interesting, so I went ahead and calculated the same statistics for three other states: Alaska, Hawaii, and Oregon.  I chose Alaska because it was the state with the second highest numbers for COVID-19 cases AND deaths per 100,000 people. Oregon and Hawaii I chose because they're on the opposite end of the list, as the two states with the least amount of COVID-19 cases and deaths per 100,000 people. 
+
+I created a separate table for each state, by filtering the US counties data table to one of the above states, filtered the data again for records between March 15, 2020 and December 31, 2021.  I then calculated the cumulative total for COVID-19 cases and deaths in each of the above states, which was then converted to the total per 100,000 people, based off the states population estimate. The last step is to turn the state's totals per 100,000 people into a rolling 7-day average per 100,000 people. Now that we have the numbers for the two states hit the hardest by COVID-19 and the numbers for the two states impacted the least, it would be interesting to vizualize the data for all four states.   
+
+##### Visualizing Averages Across States
+
+Now I will create a visualization comparing the seven-day averages for new deaths and cases per 100,000 people for North Dakota, Alaska, Oregon, & Hawaii. 
+
+```{r state comparison visual, warning= FALSE}
+# First I'll combine all the weekly average data for the four states into one table to plot.
+(st_wkly_avgs <- bind_rows(nd_wkly_avg, ak_wkly_avg, or_wkly_avg, hi_wkly_avg))
+
+# Next, I'll plot the weekly averages for cases and deaths per 100,000 people for the four states.
+st_wkly_avgs %>% 
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = wkly_avg_cases, color = state)) +
+  facet_wrap(vars(state)) +
+  labs(x = "Year", y = "", title = "Weekly Average COVID-19 Cases per 100,000 people")
+
+st_wkly_avgs %>% 
+  ggplot(aes(x = date)) +
+  geom_line(aes(y = wkly_avg_deaths, color = state)) +
+  facet_wrap(vars(state)) +
+  labs(x = "Year", y = "", title = "Weekly Average COVID-19 Deaths per 100,000 people")
+
+```
+
+In order to compare the COVID-19 numbers for each of the four states, I first needed to combine each states table of COVID-19 cases and deaths statistics.  Once the tables were combined using bind_rows(), I built two visuals to display the time series for each state's 7-day average of cases and then a second visual for deaths. I charted 'date' on the x-axis and the state's 7-day average for either cases or deaths on the y-axis.  I chose to differentiate the states by the color of their time series line and by faceting them into individual plots. I found faceting them into individual plots helped simplify it, since it was too busy with all four lines over-layed on one plot. This way, you can see each states unique trend across the two years, and compare inflection points between states.  
+
+For instance, we see that for the weekly average of COVID-19 cases per 100,000 people, North Dakota and Alaska had larger spikes than either Oregon or Hawaii.  However, Alaska, Oregon, and Hawaii all experienced their highest spike in the fall of 2021; whereas North Dakota experienced it's largest spike in the fall of 2020.  Hawaii also shows a significant spike, it's largest yet, at the tail end of the data. It would be interesting to investigate what happened in Hawaii in the winter of 2022.  
+
+As far as the weekly average of COVID-19 deaths per 100,000 people goes, North Dakota and Alaska again show higher spikes than Oregon or Hawaii. But North Dakota is the only state who shows a spike in the Fall of 2020. They show fluctuations in their data, but nothing as pronounced North Dakota in the fall of 2020. Alaska's data gets pretty chaotic in the fall of 2021, and while the other four states also show a bump in their data during that time, Alaska shows four very steep spikes and drops, which would also be interesting to look further into, to determine if it was an error or something to follow.   
